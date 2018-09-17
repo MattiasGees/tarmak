@@ -311,6 +311,16 @@ func (e *Environment) Verify() error {
 	return result.ErrorOrNil()
 }
 
+func (e *Environment) Remove() error {
+	var result *multierror.Error
+
+	if err := e.Provider().Remove(); err != nil {
+		result = multierror.Append(result, err)
+	}
+
+	return result.ErrorOrNil()
+
+}
 func (e *Environment) WingTunnel() interfaces.Tunnel {
 	return e.Tarmak().SSH().Tunnel(
 		"bastion",

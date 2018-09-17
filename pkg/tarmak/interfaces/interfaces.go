@@ -99,6 +99,9 @@ type Environment interface {
 
 	// return the vaullt for the environment
 	Vault() Vault
+
+	// Remove environment
+	Remove() error
 }
 
 type Provider interface {
@@ -129,6 +132,8 @@ type Provider interface {
 	UploadConfiguration(Cluster, io.ReadSeeker) error
 	VerifyInstanceTypes(intstancePools []InstancePool) error
 	EnsureRemoteResources() error
+	// Remove provider
+	Remove() error
 }
 
 type Tarmak interface {
