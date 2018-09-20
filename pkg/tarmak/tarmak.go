@@ -392,7 +392,32 @@ func (t *Tarmak) DestroyEnvironment() error {
 		return err
 	}
 
-	// TODO: Move environment folder to .archive
+	t.log.Info("Moving environment folder to .archive")
+
+	archivePath := filepath.Join(t.ConfigPath(), ".archive")
+	environmentArchivePath := filepath.Join(archivePath, t.Environment().Name())
+
+	if _, err := os.Stat(archivePath); err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(archivePath, os.ModePerm); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("uncatched error: %v", err)
+		}
+	}
+
+	if _, err := os.Stat(environmentArchivePath); err != nil {
+		if os.IsNotExist(err) {
+			if err := os.Rename(t.Environment().ConfigPath(), environmentArchivePath); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("uncatched error: %v", err)
+		}
+	} else {
+		return fmt.Errorf("already archived %v", t.Environment().Name())
+	}
 
 	// TODO: Remove environment config from tarmak.yml
 
