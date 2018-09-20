@@ -22,7 +22,7 @@ var environmentDestroyCmd = &cobra.Command{
 		t := tarmak.New(globalFlags)
 		defer t.Cleanup()
 
-		t.CancellationContext().WaitOrCancel(t.RemoveEnvironment)
+		t.CancellationContext().WaitOrCancel(t.DestroyEnvironment)
 	},
 }
 

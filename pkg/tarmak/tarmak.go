@@ -374,31 +374,49 @@ func (t *Tarmak) CancellationContext() interfaces.CancellationContext {
 	return t.ctx
 }
 
-func (t *Tarmak) RemoveEnvironment() error {
-
-	var result *multierror.Error
-	var args []string
-
+func (t *Tarmak) DestroyEnvironment() error {
 	t.log.Info("Destroying clusters")
 	for _, cluster := range t.Environment().Clusters() {
-		t.cluster = cluster
-		t.log.Infof("Destroying cluster %v", cluster.Name())
-
-		destroyCmd := t.NewCmdTerraform(args)
-		destroyCmd.Destroy()
+		// We first want to destroy the k8s clusters before the hub
+		if cluster.Name() != t.Environment().Hub().Name() {
+			t.cluster = cluster
+			if err := t.DestroyActivecluster(); err != nil {
+				return err
+			}
+		}
 	}
 
-	// Remove dynamodb and S3
-	//if err := e.Provider().Remove(); err != nil {
-	//	result = multierror.Append(result, err)
-	//}
-
-	// TODO: Remove folders of clusters
+	// After destroying all other clusters, we can destroy the hub
+	t.cluster = t.Environment().Hub()
+	if err := t.DestroyActivecluster(); err != nil {
+		return err
+	}
 
 	// TODO: Move environment folder to .archive
 
 	// TODO: Remove environment config from tarmak.yml
 
-	return result.ErrorOrNil()
+	return nil
 
+}
+
+func (t *Tarmak) DestroyActivecluster() error {
+	var args []string
+
+	t.log.Infof("Destroying cluster %v", t.Cluster().Name())
+	destroyCmd := t.NewCmdTerraform(args)
+	if err := destroyCmd.Destroy(); err != nil {
+		return err
+	}
+
+	t.log.Infof("Removing S3 state and dynamoDB lock for %v", t.Cluster().Name())
+	if err := t.environment.Provider().Remove(); err != nil {
+		return err
+	}
+
+	t.log.Infof("Removing tarmak folder of %v", t.Cluster().Name())
+
+	// TODO: Remove folders of cluster
+
+	return nil
 }
