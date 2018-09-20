@@ -109,13 +109,6 @@ func (c *CmdTerraform) Destroy() error {
 		return err
 	}
 
-	c.tarmak.cluster.Log().Info("Removing environment")
-
-	err = c.tarmak.environment.Remove()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/jetstack/tarmak/pkg/terraform/providers/tarmak/rpc"
 	"io"
 	"net"
 	"os"
@@ -21,7 +22,6 @@ import (
 
 	"github.com/jetstack/tarmak/pkg/tarmak/interfaces"
 	"github.com/jetstack/tarmak/pkg/tarmak/utils"
-	"github.com/jetstack/tarmak/pkg/terraform/providers/tarmak/rpc"
 )
 
 const debugShell = "debug-shell"

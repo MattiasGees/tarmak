@@ -311,28 +311,6 @@ func (e *Environment) Verify() error {
 	return result.ErrorOrNil()
 }
 
-func (e *Environment) Remove() error {
-	var result *multierror.Error
-	// TODO: Run destroy on all clusters inside the cluster
-	for _, cluster := range e.Clusters() {
-		fmt.Printf("Clustrer name: %v",cluster.Name())
-		//t.CancellationContext().WaitOrCancel(destroyCmd.Remove(t))
-	}
-
-	// Remove dynamodb and S3
-	//if err := e.Provider().Remove(); err != nil {
-	//	result = multierror.Append(result, err)
-	//}
-
-	// TODO: Remove folders of clusters
-
-	// TODO: Move environment folder to .archive
-
-	// TODO: Remove environment config from tarmak.yml
-
-	return result.ErrorOrNil()
-
-}
 func (e *Environment) WingTunnel() interfaces.Tunnel {
 	return e.Tarmak().SSH().Tunnel(
 		"bastion",

@@ -141,24 +141,33 @@ func (t *Tarmak) initializeModules() {
 func (t *Tarmak) initializeConfig() error {
 	var err error
 
+	environmentDestroy := false
+	if t.flags.Environment.Destroy.Name != "" {
+		environmentDestroy = true
+	}
 	// get current environment
 	currentEnvironmentName, err := t.config.CurrentEnvironmentName()
 	if err != nil {
 		return fmt.Errorf("error retrieving current environment name: %s", err)
 	}
+	if environmentDestroy {
+		currentEnvironmentName = t.flags.Environment.Destroy.Name
+	}
+
 	t.environment, err = t.EnvironmentByName(currentEnvironmentName)
 	if err != nil {
 		return err
 	}
-
-	clusterName, err := t.config.CurrentClusterName()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve current cluster name: %s", err)
-	}
-	// init cluster
-	t.cluster, err = t.environment.Cluster(clusterName)
-	if err != nil {
-		return fmt.Errorf("error finding current cluster '%s': %s", clusterName, err)
+	if !environmentDestroy {
+		clusterName, err := t.config.CurrentClusterName()
+		if err != nil {
+			return fmt.Errorf("failed to retrieve current cluster name: %s", err)
+		}
+		// init cluster
+		t.cluster, err = t.environment.Cluster(clusterName)
+		if err != nil {
+			return fmt.Errorf("error finding current cluster '%s': %s", clusterName, err)
+		}
 	}
 
 	return nil
@@ -298,7 +307,6 @@ func (t *Tarmak) Version() string {
 func (t *Tarmak) Validate() error {
 	var err error
 	var result error
-
 	err = t.Cluster().Validate()
 	if err != nil {
 		result = multierror.Append(result, err)
@@ -364,4 +372,33 @@ func (t *Tarmak) CmdKubectl(args []string) error {
 
 func (t *Tarmak) CancellationContext() interfaces.CancellationContext {
 	return t.ctx
+}
+
+func (t *Tarmak) RemoveEnvironment() error {
+
+	var result *multierror.Error
+	var args []string
+
+	t.log.Info("Destroying clusters")
+	for _, cluster := range t.Environment().Clusters() {
+		t.cluster = cluster
+		t.log.Infof("Destroying cluster %v", cluster.Name())
+
+		destroyCmd := t.NewCmdTerraform(args)
+		destroyCmd.Destroy()
+	}
+
+	// Remove dynamodb and S3
+	//if err := e.Provider().Remove(); err != nil {
+	//	result = multierror.Append(result, err)
+	//}
+
+	// TODO: Remove folders of clusters
+
+	// TODO: Move environment folder to .archive
+
+	// TODO: Remove environment config from tarmak.yml
+
+	return result.ErrorOrNil()
+
 }
