@@ -124,6 +124,8 @@ type Flags struct {
 
 	Cluster ClusterFlags // cluster specific flags
 
+	Environment EnvironmentFlags // environment specific flags
+
 	Version string // expose tarmak's build time version
 
 	WingDevMode bool // use a bundled wing version rather than a tagged release from GitHub
@@ -133,6 +135,11 @@ type Flags struct {
 type ClusterFlags struct {
 	Apply   ClusterApplyFlags   // flags for applying clusters
 	Destroy ClusterDestroyFlags // flags for destroying clusters
+}
+
+// This contains the environment specific operation flags
+type EnvironmentFlags struct {
+	Destroy EnvironmentDestroyFlags // flags for destroying environment
 }
 
 // Contains the cluster apply flags
@@ -151,4 +158,10 @@ type ClusterDestroyFlags struct {
 
 	InfrastructureStacks   []string // filter stacks to this list
 	ForceDestroyStateStack bool     // force destroy state stack
+}
+
+// Contains the environment destroy flags
+type EnvironmentDestroyFlags struct {
+	Name string // name of the environment
+	Force bool // delete a whole environment
 }
