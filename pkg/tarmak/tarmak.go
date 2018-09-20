@@ -415,8 +415,9 @@ func (t *Tarmak) DestroyActivecluster() error {
 	}
 
 	t.log.Infof("Removing tarmak folder of %v", t.Cluster().Name())
-
-	// TODO: Remove folders of cluster
+	if err := os.RemoveAll(t.Cluster().ConfigPath()); err != nil {
+		return err
+	}
 
 	return nil
 }
