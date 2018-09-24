@@ -2,8 +2,8 @@
 package cmd
 
 import (
-	flag "github.com/spf13/pflag"
 	"github.com/spf13/cobra"
+	flag "github.com/spf13/pflag"
 )
 
 var environmentCmd = &cobra.Command{

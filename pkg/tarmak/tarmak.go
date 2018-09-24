@@ -3,6 +3,7 @@ package tarmak
 
 import (
 	"fmt"
+	"github.com/jetstack/tarmak/pkg/tarmak/utils/input"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -375,54 +376,95 @@ func (t *Tarmak) CancellationContext() interfaces.CancellationContext {
 }
 
 func (t *Tarmak) DestroyEnvironment() error {
-	t.log.Info("Destroying clusters")
-	for _, cluster := range t.Environment().Clusters() {
-		// We first want to destroy the k8s clusters before the hub
-		if cluster.Name() != t.Environment().Hub().Name() {
-			t.cluster = cluster
-			if err := t.DestroyActivecluster(); err != nil {
-				return err
+	inputDestroy := input.New(os.Stdin, os.Stdout)
+
+	destroyClusters := true
+	moveFolder := true
+	removeConfig := true
+
+	if !t.flags.Environment.Destroy.AutoApprove {
+		d, err := inputDestroy.AskYesNo(&input.AskYesNo{
+			Default: false,
+			Query:   "Destroy all clusters?",
+		})
+		if err != nil {
+			return err
+		}
+		destroyClusters = d
+
+		m, err := inputDestroy.AskYesNo(&input.AskYesNo{
+			Default: false,
+			Query:   "Move environment folder (SSH key and vault_root_token) to .archive?",
+		})
+		if err != nil {
+			return err
+		}
+		moveFolder = m
+
+		r, err := inputDestroy.AskYesNo(&input.AskYesNo{
+			Default: false,
+			Query:   "Remove environment from tarmak.yaml?",
+		})
+		if err != nil {
+			return err
+		}
+		removeConfig = r
+	}
+
+	if destroyClusters {
+		t.log.Info("Destroying clusters")
+		for _, cluster := range t.Environment().Clusters() {
+			// We first want to destroy the k8s clusters before the hub
+			if cluster.Name() != t.Environment().Hub().Name() {
+				t.cluster = cluster
+				if err := t.DestroyActivecluster(); err != nil {
+					return err
+				}
 			}
+		}
+
+		// After destroying all other clusters, we can destroy the hub
+		t.cluster = t.Environment().Hub()
+		if err := t.DestroyActivecluster(); err != nil {
+			return err
 		}
 	}
 
-	// After destroying all other clusters, we can destroy the hub
-	t.cluster = t.Environment().Hub()
-	if err := t.DestroyActivecluster(); err != nil {
-		return err
-	}
+	if moveFolder {
+		t.log.Info("Moving environment folder to .archive")
 
-	t.log.Info("Moving environment folder to .archive")
+		archivePath := filepath.Join(t.ConfigPath(), ".archive")
+		environmentArchivePath := filepath.Join(archivePath, t.Environment().Name())
 
-	archivePath := filepath.Join(t.ConfigPath(), ".archive")
-	environmentArchivePath := filepath.Join(archivePath, t.Environment().Name())
+		if _, err := os.Stat(archivePath); err != nil {
+			if os.IsNotExist(err) {
+				if err := os.MkdirAll(archivePath, os.ModePerm); err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("uncatched error: %v", err)
+			}
+		}
 
-	if _, err := os.Stat(archivePath); err != nil {
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(archivePath, os.ModePerm); err != nil {
-				return err
+		if _, err := os.Stat(environmentArchivePath); err != nil {
+			if os.IsNotExist(err) {
+				if err := os.Rename(t.Environment().ConfigPath(), environmentArchivePath); err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("uncatched error: %v", err)
 			}
 		} else {
-			return fmt.Errorf("uncatched error: %v", err)
+			return fmt.Errorf("already archived %v", t.Environment().Name())
 		}
 	}
 
-	if _, err := os.Stat(environmentArchivePath); err != nil {
-		if os.IsNotExist(err) {
-			if err := os.Rename(t.Environment().ConfigPath(), environmentArchivePath); err != nil {
-				return err
-			}
-		} else {
-			return fmt.Errorf("uncatched error: %v", err)
+	if removeConfig {
+		t.log.Infof("Removing environment %v from tarmak.yaml", t.Environment().Name())
+
+		if err := t.config.RemoveEnvironment(t.Environment().Name()); err != nil {
+			return err
 		}
-	} else {
-		return fmt.Errorf("already archived %v", t.Environment().Name())
-	}
-
-	t.log.Infof("Removing environment %v from tarmak.yaml", t.Environment().Name())
-
-	if err := t.config.RemoveEnvironment(t.Environment().Name()); err != nil {
-		return err
 	}
 
 	return nil
