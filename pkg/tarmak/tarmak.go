@@ -391,24 +391,6 @@ func (t *Tarmak) DestroyEnvironment() error {
 			return err
 		}
 		destroyClusters = d
-
-		m, err := inputDestroy.AskYesNo(&input.AskYesNo{
-			Default: false,
-			Query:   "Move environment folder (SSH key and vault_root_token) to .archive?",
-		})
-		if err != nil {
-			return err
-		}
-		moveFolder = m
-
-		r, err := inputDestroy.AskYesNo(&input.AskYesNo{
-			Default: false,
-			Query:   "Remove environment from tarmak.yaml?",
-		})
-		if err != nil {
-			return err
-		}
-		removeConfig = r
 	}
 
 	if destroyClusters {
@@ -428,6 +410,27 @@ func (t *Tarmak) DestroyEnvironment() error {
 		if err := t.DestroyActivecluster(); err != nil {
 			return err
 		}
+	} else {
+		for _, cluster := range t.Environment().Clusters() {
+			hosts, err := cluster.ListHosts()
+			if err != nil {
+				return err
+			}
+			if len(hosts) > 0 {
+				return fmt.Errorf("can't proceed with destroying this environment, because it still has hosts running")
+			}
+		}
+	}
+
+	if !t.flags.Environment.Destroy.AutoApprove {
+		m, err := inputDestroy.AskYesNo(&input.AskYesNo{
+			Default: false,
+			Query:   "Move environment folder (SSH key and vault_root_token) to .archive?",
+		})
+		if err != nil {
+			return err
+		}
+		moveFolder = m
 	}
 
 	if moveFolder {
@@ -457,6 +460,17 @@ func (t *Tarmak) DestroyEnvironment() error {
 		} else {
 			return fmt.Errorf("already archived %v", t.Environment().Name())
 		}
+	}
+
+	if !t.flags.Environment.Destroy.AutoApprove {
+		r, err := inputDestroy.AskYesNo(&input.AskYesNo{
+			Default: false,
+			Query:   "Remove environment from tarmak.yaml?",
+		})
+		if err != nil {
+			return err
+		}
+		removeConfig = r
 	}
 
 	if removeConfig {
