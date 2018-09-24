@@ -281,6 +281,22 @@ func (c *Config) AppendEnvironment(env *tarmakv1alpha1.Environment) error {
 	return c.writeYAML(c.conf)
 }
 
+func (c *Config) RemoveEnvironment(environment string) error {
+	for key, env := range c.conf.Environments {
+		if env.Name == environment {
+			c.conf.Environments = append(c.conf.Environments[:key], c.conf.Environments[key+1:]...)
+		}
+	}
+
+	for key, cluster := range c.conf.Clusters {
+		if cluster.Environment == environment {
+			c.conf.Clusters = append(c.conf.Clusters[:key], c.conf.Clusters[key+1:]...)
+		}
+	}
+
+	return c.writeYAML(c.conf)
+}
+
 func (c *Config) UniqueEnvironmentName(name string) error {
 	for _, e := range c.Environments() {
 		if e.Name == name {

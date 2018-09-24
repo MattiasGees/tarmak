@@ -129,6 +129,8 @@ type Provider interface {
 	UploadConfiguration(Cluster, io.ReadSeeker) error
 	VerifyInstanceTypes(intstancePools []InstancePool) error
 	EnsureRemoteResources() error
+	// Remove provider
+	Remove() error
 }
 
 type Tarmak interface {
@@ -184,6 +186,8 @@ type Config interface {
 	CurrentClusterName() (string, error)
 	// currently selected env name
 	CurrentEnvironmentName() (string, error)
+	// remove environment
+	RemoveEnvironment(environment string) error
 	Contact() string
 	Project() string
 	WingDevMode() bool

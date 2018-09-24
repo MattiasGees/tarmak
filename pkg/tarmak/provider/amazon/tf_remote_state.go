@@ -385,3 +385,153 @@ func (a *Amazon) initRemoteStateKMS() error {
 
 	return nil
 }
+
+func (a *Amazon) deleteRemoteStateBucket() error {
+	svc, err := a.S3()
+	if err != nil {
+		return err
+	}
+
+	_, err = svc.DeleteBucket(&s3.DeleteBucketInput{
+		Bucket: aws.String(a.RemoteStateName()),
+	})
+
+	if err != nil {
+		ec2err, ok := err.(awserr.Error)
+		if ok && ec2err.Code() == "BucketNotEmpty" {
+			resp, err := svc.ListObjectVersions(
+				&s3.ListObjectVersionsInput{
+					Bucket: aws.String(a.RemoteStateName()),
+				},
+			)
+
+			if err != nil {
+				return fmt.Errorf("error listing objects to delete: %s", err)
+			}
+
+			objectsToDelete := make([]*s3.ObjectIdentifier, 0)
+
+			if len(resp.DeleteMarkers) != 0 {
+
+				for _, v := range resp.DeleteMarkers {
+					objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
+						Key:       v.Key,
+						VersionId: v.VersionId,
+					})
+				}
+			}
+
+			if len(resp.Versions) != 0 {
+				for _, v := range resp.Versions {
+					objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
+						Key:       v.Key,
+						VersionId: v.VersionId,
+					})
+				}
+			}
+
+			params := &s3.DeleteObjectsInput{
+				Bucket: aws.String(a.RemoteStateName()),
+				Delete: &s3.Delete{
+					Objects: objectsToDelete,
+				},
+			}
+
+			_, err = svc.DeleteObjects(params)
+
+			if err != nil {
+				return fmt.Errorf("error deleting objects: %s", err)
+			}
+
+			// recurse until bucket empty & deleted
+			return a.deleteRemoteStateBucket()
+		} else {
+			return err
+		}
+	}
+
+	return err
+}
+
+func (a *Amazon) deleteRemoteStateObjectBucket() error {
+	svc, err := a.S3()
+	if err != nil {
+		return err
+	}
+
+	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(a.RemoteStateName()),
+		Key:    aws.String(fmt.Sprintf("%s/%s/%s.tfstate", a.tarmak.Environment().Name(), a.tarmak.Cluster().Name(), "main")),
+	})
+
+	return err
+}
+
+func (a *Amazon) bucketEmpty() (bool, error) {
+	svc, err := a.S3()
+	if err != nil {
+		return false, err
+	}
+
+	result, err := svc.ListObjects(&s3.ListObjectsInput{
+		Bucket: aws.String(a.RemoteStateName()),
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	if len(result.Contents) != 0 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (a *Amazon) deleteRemoteStateItemDynamoDB() error {
+	svc, err := a.DynamoDB()
+	if err != nil {
+		return err
+	}
+
+	_, err = svc.DeleteItem(&dynamodb.DeleteItemInput{
+		TableName: aws.String(a.RemoteStateName()),
+		Key: map[string]*dynamodb.AttributeValue{
+			"LockID": {
+				S: aws.String(fmt.Sprintf("%s/%s/%s/%s.tfstate-md5", a.RemoteStateName(), a.tarmak.Environment().Name(), a.tarmak.Cluster().Name(), "main")),
+			},
+		},
+	})
+
+	return err
+}
+
+func (a *Amazon) deleteRemoteStateDynamoDB() error {
+	svc, err := a.DynamoDB()
+	if err != nil {
+		return err
+	}
+
+	_, err = svc.DeleteTable(&dynamodb.DeleteTableInput{
+		TableName: aws.String(a.RemoteStateName()),
+	})
+
+	return err
+}
+
+func (a *Amazon) countRemoteStateItemsDynamoDB() (int64, error) {
+	svc, err := a.DynamoDB()
+	if err != nil {
+		return 1, err
+	}
+
+	result, err := svc.Scan(&dynamodb.ScanInput{
+		TableName: aws.String(a.RemoteStateName()),
+	})
+
+	if err != nil {
+		return 1, err
+	}
+
+	return *result.Count, nil
+}

@@ -92,6 +92,25 @@ Usage::
 
   $ tarmak environments init
 
+``destroy``
+***********
+
+Destroy a complete environment. Environment destroy has the following steps:
+- Destroy all running clusters of that environment
+- Move SSH key and vault_root_token to a .archive folder
+- Remove environment config from tarmak.yaml
+
+Usage::
+
+  $ tarmak environment destroy
+
+Flags::
+
+  --name -n 
+      Environment name you want to destroy
+  --auto-approve [default=false]
+      Auto-approve the destroy of all 3 steps
+
 ------------
 
 Clusters

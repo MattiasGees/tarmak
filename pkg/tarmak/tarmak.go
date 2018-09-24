@@ -3,6 +3,7 @@ package tarmak
 
 import (
 	"fmt"
+	"github.com/jetstack/tarmak/pkg/tarmak/utils/input"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -141,24 +142,33 @@ func (t *Tarmak) initializeModules() {
 func (t *Tarmak) initializeConfig() error {
 	var err error
 
+	environmentDestroy := false
+	if t.flags.Environment.Destroy.Name != "" {
+		environmentDestroy = true
+	}
 	// get current environment
 	currentEnvironmentName, err := t.config.CurrentEnvironmentName()
 	if err != nil {
 		return fmt.Errorf("error retrieving current environment name: %s", err)
 	}
+	if environmentDestroy {
+		currentEnvironmentName = t.flags.Environment.Destroy.Name
+	}
+
 	t.environment, err = t.EnvironmentByName(currentEnvironmentName)
 	if err != nil {
 		return err
 	}
-
-	clusterName, err := t.config.CurrentClusterName()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve current cluster name: %s", err)
-	}
-	// init cluster
-	t.cluster, err = t.environment.Cluster(clusterName)
-	if err != nil {
-		return fmt.Errorf("error finding current cluster '%s': %s", clusterName, err)
+	if !environmentDestroy {
+		clusterName, err := t.config.CurrentClusterName()
+		if err != nil {
+			return fmt.Errorf("failed to retrieve current cluster name: %s", err)
+		}
+		// init cluster
+		t.cluster, err = t.environment.Cluster(clusterName)
+		if err != nil {
+			return fmt.Errorf("error finding current cluster '%s': %s", clusterName, err)
+		}
 	}
 
 	return nil
@@ -298,7 +308,6 @@ func (t *Tarmak) Version() string {
 func (t *Tarmak) Validate() error {
 	var err error
 	var result error
-
 	err = t.Cluster().Validate()
 	if err != nil {
 		result = multierror.Append(result, err)
@@ -364,4 +373,136 @@ func (t *Tarmak) CmdKubectl(args []string) error {
 
 func (t *Tarmak) CancellationContext() interfaces.CancellationContext {
 	return t.ctx
+}
+
+func (t *Tarmak) DestroyEnvironment() error {
+	inputDestroy := input.New(os.Stdin, os.Stdout)
+
+	destroyClusters := true
+	moveFolder := true
+	removeConfig := true
+
+	if !t.flags.Environment.Destroy.AutoApprove {
+		d, err := inputDestroy.AskYesNo(&input.AskYesNo{
+			Default: false,
+			Query:   "Destroy all clusters?",
+		})
+		if err != nil {
+			return err
+		}
+		destroyClusters = d
+	}
+
+	if destroyClusters {
+		t.log.Info("Destroying clusters")
+		for _, cluster := range t.Environment().Clusters() {
+			// We first want to destroy the k8s clusters before the hub
+			if cluster.Name() != t.Environment().Hub().Name() {
+				t.cluster = cluster
+				if err := t.DestroyActivecluster(); err != nil {
+					return err
+				}
+			}
+		}
+
+		// After destroying all other clusters, we can destroy the hub
+		t.cluster = t.Environment().Hub()
+		if err := t.DestroyActivecluster(); err != nil {
+			return err
+		}
+	} else {
+		for _, cluster := range t.Environment().Clusters() {
+			hosts, err := cluster.ListHosts()
+			if err != nil {
+				return err
+			}
+			if len(hosts) > 0 {
+				return fmt.Errorf("can't proceed with destroying this environment, because it still has hosts running")
+			}
+		}
+	}
+
+	if !t.flags.Environment.Destroy.AutoApprove {
+		m, err := inputDestroy.AskYesNo(&input.AskYesNo{
+			Default: false,
+			Query:   "Move environment folder (SSH key and vault_root_token) to .archive?",
+		})
+		if err != nil {
+			return err
+		}
+		moveFolder = m
+	}
+
+	if moveFolder {
+		t.log.Info("Moving environment folder to .archive")
+
+		archivePath := filepath.Join(t.ConfigPath(), ".archive")
+		environmentArchivePath := filepath.Join(archivePath, t.Environment().Name())
+
+		if _, err := os.Stat(archivePath); err != nil {
+			if os.IsNotExist(err) {
+				if err := os.MkdirAll(archivePath, os.ModePerm); err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("uncatched error: %v", err)
+			}
+		}
+
+		if _, err := os.Stat(environmentArchivePath); err != nil {
+			if os.IsNotExist(err) {
+				if err := os.Rename(t.Environment().ConfigPath(), environmentArchivePath); err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("uncatched error: %v", err)
+			}
+		} else {
+			return fmt.Errorf("already archived %v", t.Environment().Name())
+		}
+	}
+
+	if !t.flags.Environment.Destroy.AutoApprove {
+		r, err := inputDestroy.AskYesNo(&input.AskYesNo{
+			Default: false,
+			Query:   "Remove environment from tarmak.yaml?",
+		})
+		if err != nil {
+			return err
+		}
+		removeConfig = r
+	}
+
+	if removeConfig {
+		t.log.Infof("Removing environment %v from tarmak.yaml", t.Environment().Name())
+
+		if err := t.config.RemoveEnvironment(t.Environment().Name()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
+func (t *Tarmak) DestroyActivecluster() error {
+	var args []string
+
+	t.log.Infof("Destroying cluster %v", t.Cluster().Name())
+	destroyCmd := t.NewCmdTerraform(args)
+	if err := destroyCmd.Destroy(); err != nil {
+		return err
+	}
+
+	t.log.Infof("Removing S3 state and dynamoDB lock for %v", t.Cluster().Name())
+	if err := t.environment.Provider().Remove(); err != nil {
+		return err
+	}
+
+	t.log.Infof("Removing tarmak folder of %v", t.Cluster().Name())
+	if err := os.RemoveAll(t.Cluster().ConfigPath()); err != nil {
+		return err
+	}
+
+	return nil
 }
