@@ -15,12 +15,11 @@ var environmentCmd = &cobra.Command{
 func environmentDestroyFlags(fs *flag.FlagSet) {
 	store := &globalFlags.Environment.Destroy
 
-	fs.BoolVarP(
-		&store.Force,
-		"force",
-		"f",
+	fs.BoolVar(
+		&store.AutoApprove,
+		"auto-approve",
 		false,
-		"destroy a complete environment",
+		"auto-approve destroy of a complete environment",
 	)
 
 	fs.StringVarP(

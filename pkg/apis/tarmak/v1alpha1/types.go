@@ -163,5 +163,5 @@ type ClusterDestroyFlags struct {
 // Contains the environment destroy flags
 type EnvironmentDestroyFlags struct {
 	Name  string // name of the environment
-	Force bool   // delete a whole environment
+	AutoApprove bool   // auto-approve destroying a whole environment
 }
