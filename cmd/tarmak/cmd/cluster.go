@@ -69,26 +69,6 @@ func clusterFlagInfrastructureStacks(fs *flag.FlagSet, store *[]string) {
 	)
 }
 
-func environmentDestroyFlags(fs *flag.FlagSet) {
-	store := &globalFlags.Environment.Destroy
-
-	fs.BoolVarP(
-		&store.Force,
-		"force",
-		"f",
-		false,
-		"destroy a complete environment",
-	)
-
-	fs.StringVarP(
-		&store.Name,
-		"name",
-		"n",
-		"",
-		"name of the environment to destroy",
-	)
-}
-
 func init() {
 	RootCmd.AddCommand(clusterCmd)
 }
