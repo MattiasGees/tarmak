@@ -419,7 +419,11 @@ func (t *Tarmak) DestroyEnvironment() error {
 		return fmt.Errorf("already archived %v", t.Environment().Name())
 	}
 
-	// TODO: Remove environment config from tarmak.yml
+	t.log.Infof("Removing environment %v from tarmak.yaml", t.Environment().Name())
+
+	if err := t.config.RemoveEnvironment(t.Environment().Name()); err != nil {
+		return err
+	}
 
 	return nil
 
