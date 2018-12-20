@@ -207,7 +207,7 @@ func (ti *TarmakInstance) initProvider(e *expect.GExpect) error {
 		&expect.BExp{R: tarmakInitPrompt},                              //
 		&expect.BSnd{S: "develop.tarmak.org\n"},                        // public route 53
 		&expect.BExp{R: tarmakInitYesNo},                               //
-		&expect.BSnd{S: 	"Y\n"},                                         // save provider
+		&expect.BSnd{S: "Y\n"},                                         // save provider
 	}, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("unexpected expect flow for init provider res=%+v error: %+v", res, err)
@@ -297,14 +297,49 @@ func (ti *TarmakInstance) UpdateKubernetesVersion() error {
 
 	config, err := ioutil.ReadFile(fmt.Sprintf("%v/tarmak.yaml", ti.configPath))
 	if err != nil {
-		fmt.Errorf("Error reading config file: %+v", err)
+		return fmt.Errorf("Error reading config file: %+v", err)
 	}
 	output := strings.Replace(string(config), "version: 1.11.5", "version: 1.12.4", 1)
 
 	d1 := []byte(output)
 	err = ioutil.WriteFile(fmt.Sprintf("%v/tarmak.yaml", ti.configPath), d1, 0644)
 	if err != nil {
-		fmt.Errorf("Error writing config file: %+v", err)
+		return fmt.Errorf("Error writing config file: %+v", err)
+	}
+	return nil
+}
+
+func (ti *TarmakInstance) RunAndVerify() error {
+	ti.t.Log("run cluster apply command")
+	c := ti.Command("cluster", "apply")
+	// write error out to my stdout
+	c.Stderr = os.Stderr
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("unexpected error: %+v", err)
+	}
+
+	ti.t.Log("get component status")
+	c = ti.Command("cluster", "kubectl", "get", "cs", "-o", "yaml")
+	// write error out to my stdout
+	c.Stderr = os.Stderr
+	c.Stdout = os.Stdout
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("unexpected error: %+v", err)
+	}
+	return nil
+}
+
+func (ti *TarmakInstance) GenerateAndBuild() error {
+	ti.t.Log("initialise config for cluster")
+	if err := ti.Init(); err != nil {
+		return fmt.Errorf("unexpected error: %+v", err)
+	}
+
+	ti.t.Log("build tarmak image")
+	c := ti.Command("cluster", "image", "build")
+	c.Stderr = os.Stderr
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("unexpected error: %+v", err)
 	}
 	return nil
 }
